@@ -128,6 +128,46 @@ def ajout_winrate_confrontation_directe(df_resultat_matchs, x):
     df_resultat_matchs['winrate_confrontation_home '+str(x)+' ans'] = winrate_confrontations
     return df_resultat_matchs
 
+def calculer_classement_moyenne_club(df_resultat_matchs, club_id, saison_match, x):
+    saisons_precedentes = [saison_match - i for i in range(1, x + 1)]
+
+    # Filtrer les matchs du club pendant ces saisons
+    matchs_club = df_resultat_matchs[df_resultat_matchs['season'].isin(saisons_precedentes)]
+    
+    # Séparer domicile et extérieur
+    matchs_domicile = matchs_club[matchs_club["home_club_id"] == club_id]
+    matchs_exterieur = matchs_club[matchs_club["away_club_id"] == club_id]
+
+    # Récupérer les positions (NaN ignorés automatiquement par mean())
+    positions = pd.concat([
+        matchs_domicile["home_club_position"],
+        matchs_exterieur["away_club_position"]
+    ])
+
+    if positions.empty:
+        return 20.0  # Position moyenne par défaut
+    else:
+        return positions.mean()
+
+
+def ajout_classement_moyen_historique(df_resultat_matchs, x):
+    pos_moyennes = []
+    for index, row in df_resultat_matchs.iterrows():
+        home_club_id = row['home_club_id']
+        away_club_id = row['away_club_id']
+        saison = row['season']
+
+        pos_home = calculer_classement_moyenne_club(df_resultat_matchs, home_club_id, saison, x)
+        pos_away = calculer_classement_moyenne_club(df_resultat_matchs, away_club_id, saison, x)
+
+        pos_moyennes.append((pos_home, pos_away))
+
+    df_resultat_matchs['pos_moy_home_'+str(x)+'_ans'] = [p[0] for p in pos_moyennes]
+    df_resultat_matchs['pos_moy_away_'+str(x)+'_ans'] = [p[1] for p in pos_moyennes]
+
+    return df_resultat_matchs
+
+
 
 
 
