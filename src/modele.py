@@ -12,9 +12,16 @@ def affichage_complet_score(y_test,y_pred):
 
 
 #Prédiction simple basé sur le signe de la différence
-def prediction_modele_simple(diff_series):
+def prediction_modele_simple_diff_position(diff_series):
     diff_values = diff_series.values
     pred = np.zeros_like(diff_values)
     pred[diff_values > 1] = -1
     pred[diff_values < -1] = 1
+    return pd.Series(pred, index=diff_series.index)
+
+def prediction_modele_simple_diff_winrate(diff_series):
+    diff_values = diff_series.values
+    pred = np.zeros_like(diff_values)
+    pred[diff_values > 0.05] = 1
+    pred[diff_values < -0.05] = -1
     return pd.Series(pred, index=diff_series.index)
