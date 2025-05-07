@@ -230,3 +230,28 @@ def calcul_log_ratio_valorisation(df_matchs,df_composition_equipes,df_valeur_jou
     df_matchs_valo["LOG Ratio value home par away"] = np.log(df_matchs_valo["home_team_value"] / df_matchs_valo["away_team_value"])
     df_matchs_valo = df_matchs_valo.drop(columns=["home_team_value","away_team_value"])
     return df_matchs_valo
+
+
+def ajout_bool_nouveau_club(df):
+    est_nouveau_home = []
+    est_nouveau_away = []
+
+    for idx, row in df.iterrows():
+        saison_precedente = row['season'] - 1
+        home_id = row['home_club_id']
+        away_id = row['away_club_id']
+
+        # Vérifie la présence du club à domicile l’année précédente
+        home_a_joue = not df[((df['season'] == saison_precedente) & 
+                              ((df['home_club_id'] == home_id) | (df['away_club_id'] == home_id)))].empty
+        est_nouveau_home.append(0 if home_a_joue else 1)
+
+        # Vérifie la présence du club à l’extérieur l’année précédente
+        away_a_joue = not df[((df['season'] == saison_precedente) & 
+                              ((df['home_club_id'] == away_id) | (df['away_club_id'] == away_id)))].empty
+        est_nouveau_away.append(0 if away_a_joue else 1)
+
+    df['nouveau club home'] = est_nouveau_home
+    df['nouveau club away'] = est_nouveau_away
+
+    return df
