@@ -27,7 +27,14 @@ def affichage_complet_score(y_test,y_pred):
 
     # Texte explicatif à droite
     ax2.axis("off")  # Pas d'axes visibles
+    
+    y_test = np.array(y_test)
+    y_pred = np.array(y_pred)
+    total = len(y_test)
+    prediction_opposee = np.sum(((y_test == -1) & (y_pred == 1)) | ((y_test == 1) & (y_pred == -1))) / total
+
     text = (classification_report(y_test, y_pred, target_names=["-1", "0", "1"],digits=3,zero_division=0))
+    text = text + f"\n\n\nTaux predictions opposees : {prediction_opposee:.2%}"
     ax2.text(1, 1, text, fontsize=11, va="top",ha="right")
 
     plt.tight_layout()
