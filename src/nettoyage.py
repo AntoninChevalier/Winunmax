@@ -228,8 +228,100 @@ def calcul_log_ratio_valorisation(df_matchs,df_composition_equipes,df_valeur_jou
     df_matchs_valo["away_team_value"] = df_matchs_valo["away_team_value"].fillna(22000000)
 
     df_matchs_valo["LOG Ratio value home par away"] = np.log(df_matchs_valo["home_team_value"] / df_matchs_valo["away_team_value"])
-    df_matchs_valo = df_matchs_valo.drop(columns=["home_team_value","away_team_value"])
+    #df_matchs_valo = df_matchs_valo.drop(columns=["home_team_value","away_team_value"])
     return df_matchs_valo
+
+
+
+def calcul_valorisation_flexible(df_matchs, df_compo, df_valeurs, methode="diff", valeur_par_defaut=22000000):
+    def calcul_market_value_sans_remplacants(df_compo, df_valeurs):
+        df_compo['date'] = pd.to_datetime(df_compo['date'])
+        df_valeurs['date'] = pd.to_datetime(df_valeurs['date'])
+
+        df = df_compo[df_compo['type'] == 'StartingXI'].merge(
+            df_valeurs, on=['player_id'], suffixes=('', '_val')
+        )
+
+        df = df[df['date_val'] <= df['date']]
+        df = df.sort_values('date_val').drop_duplicates(subset=['player_id', 'date'], keep='last')
+
+        return df.groupby(['game_id', 'club_id'])['market_value_in_eur'].sum().reset_index().rename(columns={'market_value_in_eur': 'team_market_value'})
+
+    df_valeurs_equipes = calcul_market_value_sans_remplacants(df_compo, df_valeurs)
+
+    # On isole les valeurs de 2022 pour l'estimation de 2023 si besoin
+    df_matchs_dates = df_matchs[['game_id', 'season', 'home_club_id', 'away_club_id']]
+    valeurs_2022 = df_matchs_dates[df_matchs_dates['season'] == 2022].merge(
+        df_valeurs_equipes, on=['game_id'], how='left'
+    )
+    moyennes_2022 = valeurs_2022.groupby('club_id')['team_market_value'].mean().fillna(valeur_par_defaut)
+
+    # Ajout des valeurs home et away
+    df_valeurs_home = df_valeurs_equipes.rename(columns={'club_id': 'home_club_id', 'team_market_value': 'home_team_value'})
+    df_valeurs_away = df_valeurs_equipes.rename(columns={'club_id': 'away_club_id', 'team_market_value': 'away_team_value'})
+
+    df = df_matchs.merge(df_valeurs_home, on=['game_id', 'home_club_id'], how='left')
+    df = df.merge(df_valeurs_away, on=['game_id', 'away_club_id'], how='left')
+
+    # Remplacement par moyenne 2022 si saison == 2023
+    mask_2023 = df['season'] == 2023
+    df.loc[mask_2023 & df['home_team_value'].isna(), 'home_team_value'] = df.loc[mask_2023, 'home_club_id'].map(moyennes_2022)
+    df.loc[mask_2023 & df['away_team_value'].isna(), 'away_team_value'] = df.loc[mask_2023, 'away_club_id'].map(moyennes_2022)
+
+    # Remplissage final si aucune info
+    df['home_team_value'] = df['home_team_value'].fillna(valeur_par_defaut)
+    df['away_team_value'] = df['away_team_value'].fillna(valeur_par_defaut)
+
+    # Application de la méthode choisie
+    if methode == "diff":
+        df["Difference value home et away"] = df["home_team_value"] - df["away_team_value"]
+        df = df.drop(columns=["home_team_value","away_team_value"])
+    elif methode == "ratio":
+        df["Ratio value home par away"] = df["home_team_value"] / df["away_team_value"]
+        df = df.drop(columns=["home_team_value","away_team_value"])
+    elif methode == "log_ratio":
+        df["LOG Ratio value home par away"] = np.log(df["home_team_value"] / df["away_team_value"])
+    else:
+        raise ValueError("Méthode non reconnue : choisir 'diff', 'ratio' ou 'log_ratio'.")
+
+    return df
+
+import numpy as np
+
+def remplir_valeurs_2023_depuis_2022(df):
+    # Séparer les saisons
+    df_2022 = df[df['season'] == 2022]
+    df_2023 = df[df['season'] == 2023].copy()
+
+    # Moyennes par club pour home et away en 2022
+    moy_home = df_2022.groupby('home_club_id')[['home_team_value']].mean().rename(columns={"home_team_value": "home_team_value_2022"})
+    moy_away = df_2022.groupby('away_club_id')[['away_team_value']].mean().rename(columns={"away_team_value": "away_team_value_2022"})
+
+    # Merge des moyennes sur les lignes de 2023
+    df_2023 = df_2023.merge(moy_home, on='home_club_id', how='left')
+    df_2023 = df_2023.merge(moy_away, on='away_club_id', how='left')
+
+    # Remplacement direct des valeurs par les moyennes
+    df_2023['home_team_value'] = df_2023['home_team_value_2022'].fillna(30000000)
+    df_2023['away_team_value'] = df_2023['away_team_value_2022'].fillna(30000000)
+
+    # Calculs des ratios et log-ratios
+    df_2023["Difference value home et away"] = df_2023["home_team_value"] - df_2023["away_team_value"]
+    df_2023['Ratio value home par away'] = df_2023['home_team_value'] / df_2023['away_team_value']
+    df_2023['LOG Ratio value home par away'] = np.log(df_2023['Ratio value home par away'])
+
+    # Nettoyage
+    df_2023.drop(columns=['home_team_value_2022', 'away_team_value_2022'], inplace=True)
+
+    # Concat avec les autres saisons
+    df_autres = df[df['season'] != 2023]
+    df_final = pd.concat([df_autres, df_2023], ignore_index=True).sort_values(by='game_id')
+
+    return df_final
+
+
+
+
 
 
 def ajout_bool_nouveau_club(df):
